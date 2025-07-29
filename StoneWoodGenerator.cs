@@ -1,8 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
+using HarmonyLib;
+using Jotunn.Managers;
+using Stone_and_Wood_Generator;
+using System.Collections;
 
 // Token: 0x020001BC RID: 444
 public class StoneWoodGenerator : MonoBehaviour, IHasHoverMenuExtended
@@ -38,8 +43,8 @@ public class StoneWoodGenerator : MonoBehaviour, IHasHoverMenuExtended
             Switch emptyOreSwitch2 = this.m_emptyOreSwitch;
             emptyOreSwitch2.m_onHover = (Switch.TooltipCallback)Delegate.Combine(emptyOreSwitch2.m_onHover, new Switch.TooltipCallback(this.OnHoverEmptyOre));
         }
-        this.m_nview.Register<string>("RPC_AddOre", new Action<long, string>(this.RPC_AddOre));
-        this.m_nview.Register("RPC_AddFuel", new Action<long>(this.RPC_AddFuel));
+        //this.m_nview.Register<string>("RPC_AddOre", new Action<long, string>(this.RPC_AddOre));
+        //this.m_nview.Register("RPC_AddFuel", new Action<long>(this.RPC_AddFuel));
         this.m_nview.Register("RPC_EmptyProcessed", new Action<long>(this.RPC_EmptyProcessed));
         WearNTear component = base.GetComponent<WearNTear>();
         if (component)
@@ -126,34 +131,64 @@ public class StoneWoodGenerator : MonoBehaviour, IHasHoverMenuExtended
     // Token: 0x060019EC RID: 6636 RVA: 0x000C1658 File Offset: 0x000BF858
     private bool OnAddOre(Switch sw, Humanoid user, ItemDrop.ItemData item)
     {
+        //if (item == null)
+        //{
+        //    item = this.FindCookableItem(user.GetInventory());
+        //    if (item == null)
+        //    {
+        //        user.Message(MessageHud.MessageType.Center, "$msg_noprocessableitems", 0, null);
+        //        return false;
+        //    }
+        //}
+        //if (!this.IsItemAllowed(item.m_dropPrefab.name))
+        //{
+        //    user.Message(MessageHud.MessageType.Center, "$msg_wontwork", 0, null);
+        //    return false;
+        //}
+        //ZLog.Log("trying to add " + item.m_shared.m_name);
+        //if (this.GetQueueSize() >= this.m_maxOre)
+        //{
+        //    user.Message(MessageHud.MessageType.Center, "$msg_itsfull", 0, null);
+        //    return false;
+        //}
+        //user.Message(MessageHud.MessageType.Center, "$msg_added " + item.m_shared.m_name, 0, null);
+        //user.GetInventory().RemoveItem(item, 1);
+        //this.m_nview.InvokeRPC("RPC_AddOre", new object[] { item.m_dropPrefab.name });
+        //this.m_addedOreTime = Time.time;
+        //if (this.m_addOreAnimationDuration > 0f)
+        //{
+        //    this.SetAnimation(true);
+        //}
+        //return true;
+
+        if (!this.m_nview.IsOwner())
+            return false;
+
+        if (this is not StoneWoodGenerator generator)
+            return true;
+
+        if (!generator.TryGetPlayerZone(user.gameObject, out var inputType))
+        {
+            user.Message(MessageHud.MessageType.Center, "Stand near an input zone!", 0);
+            return false;
+        }
+
         if (item == null)
         {
-            item = this.FindCookableItem(user.GetInventory());
-            if (item == null)
-            {
-                user.Message(MessageHud.MessageType.Center, "$msg_noprocessableitems", 0, null);
-                return false;
-            }
-        }
-        if (!this.IsItemAllowed(item.m_dropPrefab.name))
-        {
-            user.Message(MessageHud.MessageType.Center, "$msg_wontwork", 0, null);
+            user.Message(MessageHud.MessageType.Center, "No item!", 0);
             return false;
         }
-        ZLog.Log("trying to add " + item.m_shared.m_name);
-        if (this.GetQueueSize() >= this.m_maxOre)
+
+        var validTiers = new HashSet<string> { "Bronze", "Iron", "Silver", "BlackMetal" };
+        if (!validTiers.Contains(item.m_shared.m_name))
         {
-            user.Message(MessageHud.MessageType.Center, "$msg_itsfull", 0, null);
+            user.Message(MessageHud.MessageType.Center, "Invalid catalyst!", 0);
             return false;
         }
-        user.Message(MessageHud.MessageType.Center, "$msg_added " + item.m_shared.m_name, 0, null);
-        user.GetInventory().RemoveItem(item, 1);
-        this.m_nview.InvokeRPC("RPC_AddOre", new object[] { item.m_dropPrefab.name });
-        this.m_addedOreTime = Time.time;
-        if (this.m_addOreAnimationDuration > 0f)
-        {
-            this.SetAnimation(true);
-        }
+
+        this.m_nview.GetZDO().Set("catalystTier", item.m_shared.m_name);
+        user.Message(MessageHud.MessageType.Center, $"Catalyst set: {item.m_shared.m_name}", 0);
+        // Optional: user.GetInventory().RemoveItem(item.m_shared.m_name, 1);
         return true;
     }
 
@@ -282,37 +317,63 @@ public class StoneWoodGenerator : MonoBehaviour, IHasHoverMenuExtended
     // Token: 0x060019F8 RID: 6648 RVA: 0x000C19E0 File Offset: 0x000BFBE0
     private bool OnAddFuel(Switch sw, Humanoid user, ItemDrop.ItemData item)
     {
-        if (item != null && item.m_shared.m_name != this.m_fuelItem.m_itemData.m_shared.m_name)
+        //if (item != null && item.m_shared.m_name != this.m_fuelItem.m_itemData.m_shared.m_name)
+        //{
+        //    user.Message(MessageHud.MessageType.Center, "$msg_wrongitem", 0, null);
+        //    return false;
+        //}
+        //if (this.GetFuel() > (float)(this.m_maxFuel - 1))
+        //{
+        //    user.Message(MessageHud.MessageType.Center, "$msg_itsfull", 0, null);
+        //    return false;
+        //}
+        //if (!user.GetInventory().HaveItem(this.m_fuelItem.m_itemData.m_shared.m_name, true))
+        //{
+        //    user.Message(MessageHud.MessageType.Center, "$msg_donthaveany " + this.m_fuelItem.m_itemData.m_shared.m_name, 0, null);
+        //    return false;
+        //}
+        //user.Message(MessageHud.MessageType.Center, "$msg_added " + this.m_fuelItem.m_itemData.m_shared.m_name, 0, null);
+        //user.GetInventory().RemoveItem(this.m_fuelItem.m_itemData.m_shared.m_name, 1, -1, true);
+        //this.m_nview.InvokeRPC("RPC_AddFuel", Array.Empty<object>());
+        //return true;
+
+        if (!this.m_nview.IsOwner())
+            return false;
+
+        if (this is not StoneWoodGenerator generator)
+            return true;
+
+        if (!generator.TryGetPlayerZone(user.gameObject, out var inputType))
         {
-            user.Message(MessageHud.MessageType.Center, "$msg_wrongitem", 0, null);
+            user.Message(MessageHud.MessageType.Center, "Stand near an input zone!", 0);
             return false;
         }
-        if (this.GetFuel() > (float)(this.m_maxFuel - 1))
+
+        if (item == null)
         {
-            user.Message(MessageHud.MessageType.Center, "$msg_itsfull", 0, null);
+            user.Message(MessageHud.MessageType.Center, "No item!", 0);
             return false;
         }
-        if (!user.GetInventory().HaveItem(this.m_fuelItem.m_itemData.m_shared.m_name, true))
-        {
-            user.Message(MessageHud.MessageType.Center, "$msg_donthaveany " + this.m_fuelItem.m_itemData.m_shared.m_name, 0, null);
-            return false;
-        }
-        user.Message(MessageHud.MessageType.Center, "$msg_added " + this.m_fuelItem.m_itemData.m_shared.m_name, 0, null);
-        user.GetInventory().RemoveItem(this.m_fuelItem.m_itemData.m_shared.m_name, 1, -1, true);
-        this.m_nview.InvokeRPC("RPC_AddFuel", Array.Empty<object>());
+
+        this.m_nview.GetZDO().Set("inputResource", item.m_shared.m_name);
+        user.GetInventory().RemoveItem(item.m_shared.m_name, 1);
+        user.Message(MessageHud.MessageType.Center, $"Resource added: {item.m_shared.m_name}", 0);
+
         return true;
     }
 
     // Token: 0x060019F9 RID: 6649 RVA: 0x000C1AF8 File Offset: 0x000BFCF8
-    private void RPC_AddFuel(long sender)
+    [HarmonyPatch(typeof(Smelter), "RPC_AddFuel")]
+    private void Smelter_AddFuel_Patch(long sender)
     {
-        if (!this.m_nview.IsOwner())
+        static bool Prefix(Smelter __instance ,long sender)
         {
-            return;
+            if (__instance.gameObject.name != "StoneWoodGenerator(Clone)")
+                return true; // allow vanilla smelters to continue
+
+            // Prevent the default fuel system from interfering
+            return false;
         }
-        float fuel = this.GetFuel();
-        this.SetFuel(fuel + 1f);
-        this.m_fuelAddedEffects.Create(base.transform.position, base.transform.rotation, base.transform, 1f, -1);
     }
 
     // Token: 0x060019FA RID: 6650 RVA: 0x000C1B58 File Offset: 0x000BFD58
@@ -368,63 +429,111 @@ public class StoneWoodGenerator : MonoBehaviour, IHasHoverMenuExtended
     // Token: 0x060019FF RID: 6655 RVA: 0x000C1C5C File Offset: 0x000BFE5C
     private void UpdateSmelter()
     {
-        if (!this.m_nview.IsValid())
+        if (!this.m_nview.IsValid()) return;
+
+        ZDO zdo = this.m_nview.GetZDO();
+        if (zdo == null) return;
+
+        string input = zdo.GetString("inputResource", "");
+        string catalyst = zdo.GetString("catalystTier", "");
+        bool isSmelting = zdo.GetBool("isSmelting", false);
+
+        if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(catalyst))
         {
+            zdo.Set("isSmelting", false);
             return;
         }
-        this.UpdateRoof();
-        this.UpdateSmoke();
-        this.UpdateState();
-        if (!this.m_nview.IsOwner())
+
+        // Use consistent network time
+        DateTime now = ZNet.instance.GetTime().ToUniversalTime();
+        DateTime unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        float currentTime = (float)(now - unixEpoch).TotalSeconds;
+
+        if (!isSmelting)
         {
+            zdo.Set("isSmelting", true);
+            zdo.Set("smeltStartTime", currentTime);
             return;
         }
-        double deltaTime = this.GetDeltaTime();
-        float num = this.GetAccumulator();
-        num += (float)deltaTime;
-        if (num > 3600f)
+
+        // Smelting in progress
+        float startTime = zdo.GetFloat("smeltStartTime", 0.0f);
+        float duration = tierIntervals.GetValueSafe(catalyst);
+
+        if (currentTime - startTime >= duration)
         {
-            num = 3600f;
-        }
-        float num2 = (this.m_windmill ? this.m_windmill.GetPowerOutput() : 1f);
-        while (num >= 1f)
-        {
-            num -= 1f;
-            float num3 = this.GetFuel();
-            string queuedOre = this.GetQueuedOre();
-            if ((this.m_maxFuel == 0 || num3 > 0f) && (this.m_maxOre == 0 || queuedOre != "") && this.m_secPerProduct > 0f && (!this.m_requiresRoof || this.m_haveRoof) && !this.m_blockedSmoke)
+            GameObject prefab = ObjectDB.instance.GetItemPrefab(input);
+            if (prefab != null)
             {
-                float num4 = 1f * num2;
-                if (this.m_maxFuel > 0)
-                {
-                    float num5 = this.m_secPerProduct / (float)this.m_fuelPerProduct;
-                    num3 -= num4 / num5;
-                    if (num3 < 0.0001f)
-                    {
-                        num3 = 0f;
-                    }
-                    this.SetFuel(num3);
-                }
-                if (queuedOre != "")
-                {
-                    float num6 = this.GetBakeTimer();
-                    num6 += num4;
-                    this.SetBakeTimer(num6);
-                    if (num6 >= this.m_secPerProduct)
-                    {
-                        this.SetBakeTimer(0f);
-                        this.RemoveOneOre();
-                        this.QueueProcessed(queuedOre);
-                    }
-                }
+                Vector3 dropPos = transform.position + transform.forward + Vector3.up;
+                Instantiate(prefab, dropPos, Quaternion.identity);
             }
+
+            zdo.Set("smeltStartTime", currentTime);
+
+            // Reset or allow continuous smelting if needed
+            //zdo.Set("isSmelting", false);
+            //zdo.Set("inputResource", "");
         }
-        if (this.GetQueuedOre() == "" || ((float)this.m_maxFuel > 0f && this.GetFuel() == 0f))
-        {
-            this.SpawnProcessed();
-        }
-        this.SetAccumulator(num);
     }
+
+    
+    //if (!this.m_nview.IsValid())
+    //{
+    //    return;
+    //}
+    //this.UpdateRoof();
+    //this.UpdateSmoke();
+    //this.UpdateState();
+    //if (!this.m_nview.IsOwner())
+    //{
+    //    return;
+    //}
+    //double deltaTime = this.GetDeltaTime();
+    //float num = this.GetAccumulator();
+    //num += (float)deltaTime;
+    //if (num > 3600f)
+    //{
+    //    num = 3600f;
+    //}
+    //float num2 = (this.m_windmill ? this.m_windmill.GetPowerOutput() : 1f);
+    //while (num >= 1f)
+    //{
+    //    num -= 1f;
+    //    float num3 = this.GetFuel();
+    //    string queuedOre = this.GetQueuedOre();
+    //    if ((this.m_maxFuel == 0 || num3 > 0f) && (this.m_maxOre == 0 || queuedOre != "") && this.m_secPerProduct > 0f && (!this.m_requiresRoof || this.m_haveRoof) && !this.m_blockedSmoke)
+    //    {
+    //        float num4 = 1f * num2;
+    //        if (this.m_maxFuel > 0)
+    //        {
+    //            //float num5 = this.m_secPerProduct / (float)this.m_fuelPerProduct;
+    //            //num3 -= num4 / num5;
+    //            //if (num3 < 0.0001f)
+    //            //{
+    //            //    num3 = 0f;
+    //            //}
+    //            //this.SetFuel(num3);
+    //        }
+    //        if (queuedOre != "")
+    //        {
+    //            float num6 = this.GetBakeTimer();
+    //            num6 += num4;
+    //            this.SetBakeTimer(num6);
+    //            if (num6 >= this.m_secPerProduct)
+    //            {
+    //                this.SetBakeTimer(0f);
+    //                //this.RemoveOneOre();
+    //                this.QueueProcessed(queuedOre);
+    //            }
+    //        }
+    //    }
+    //}
+    //if (this.GetQueuedOre() == "" || ((float)this.m_maxFuel > 0f && this.GetFuel() == 0f))
+    //{
+    //    this.SpawnProcessed();
+    //}
+    //this.SetAccumulator(num);
 
     // Token: 0x06001A00 RID: 6656 RVA: 0x000C1E1C File Offset: 0x000C001C
     private void QueueProcessed(string ore)
@@ -671,6 +780,36 @@ public class StoneWoodGenerator : MonoBehaviour, IHasHoverMenuExtended
             return false;
         }
     }
+
+    public void SetPlayerZone(GameObject player, InputTriggerZone.InputType type)
+    {
+        playerZones[player] = type;
+    }
+
+    public void ClearPlayerZone(GameObject player)
+    {
+        if (playerZones.ContainsKey(player))
+            playerZones.Remove(player);
+    }
+
+    public bool TryGetPlayerZone(GameObject player, out InputTriggerZone.InputType type)
+    {
+        return playerZones.TryGetValue(player, out type);
+    }
+
+    // Define allowed catalyst tiers
+    HashSet<string> validTiers = new HashSet<string> { "Bronze", "Iron", "Silver", "BlackMetal" };
+
+    private readonly Dictionary<string, float> tierIntervals = new()
+        {
+            { "Bronze", 10f },
+            { "Iron", 8f },
+            { "Silver", 6f },
+            { "BlackMetal", 4f }
+        };
+
+
+    private readonly Dictionary<GameObject, InputTriggerZone.InputType> playerZones = new();
 
     // Token: 0x04001A70 RID: 6768
     public string m_name = "Smelter";
